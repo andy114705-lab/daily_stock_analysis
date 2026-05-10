@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for market review lock stale cleanup on platforms without fcntl."""
 
+import os
 import tempfile
 import unittest
 from datetime import datetime, timedelta
@@ -61,6 +62,37 @@ class MarketReviewNoFcntlLockTestCase(unittest.TestCase):
 
             self.assertIsNone(token)
             self.assertTrue(lock_path.exists())
+
+    def test_empty_fresh_no_fcntl_lock_file_blocks_acquisition(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = SimpleNamespace(database_path=str(Path(temp_dir) / "stock_analysis.db"))
+            lock_path = market_review_lock.market_review_lock_path(config)
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            lock_path.touch()
+
+            with patch.object(market_review_lock, "fcntl", None):
+                token = market_review_lock.try_acquire_market_review_lock(config)
+
+            self.assertIsNone(token)
+            self.assertTrue(lock_path.exists())
+
+    def test_empty_old_no_fcntl_lock_file_is_recovered(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = SimpleNamespace(database_path=str(Path(temp_dir) / "stock_analysis.db"))
+            lock_path = market_review_lock.market_review_lock_path(config)
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            lock_path.touch()
+            old_timestamp = (datetime.now() - timedelta(days=2)).timestamp()
+            os.utime(lock_path, (old_timestamp, old_timestamp))
+
+            with patch.object(market_review_lock, "fcntl", None):
+                token = market_review_lock.try_acquire_market_review_lock(config)
+
+            self.assertIsNotNone(token)
+            try:
+                self.assertTrue(token.uses_flock is False)
+            finally:
+                market_review_lock.release_market_review_lock(token)
 
     def test_lock_with_old_started_at_is_recovered_even_if_process_alive(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

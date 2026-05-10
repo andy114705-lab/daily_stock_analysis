@@ -69,16 +69,27 @@ def _read_lock_metadata(lock_path: Path) -> dict[str, str]:
     return metadata
 
 
+def _is_lock_file_expired(lock_path: Path) -> bool:
+    try:
+        modified_at = datetime.fromtimestamp(lock_path.stat().st_mtime)
+    except OSError:
+        return False
+
+    return datetime.now() - modified_at > timedelta(
+        seconds=_MARKET_REVIEW_LOCK_STALE_TTL_SECONDS
+    )
+
+
 def _is_stale_lock(lock_path: Path) -> bool:
     metadata = _read_lock_metadata(lock_path)
     pid_raw = metadata.get("pid")
     if not pid_raw:
-        return True
+        return _is_lock_file_expired(lock_path)
 
     try:
         pid = int(pid_raw)
     except ValueError:
-        return True
+        return _is_lock_file_expired(lock_path)
 
     if not _is_process_alive(pid):
         return True
