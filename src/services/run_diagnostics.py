@@ -24,11 +24,12 @@ _CURRENT_CONTEXT: ContextVar[Optional["RunDiagnosticContext"]] = ContextVar(
 )
 
 _SECRET_PATTERNS = (
+    re.compile(r"(?i)\b(authorization)\s*[:=]\s*(?:Bearer|Basic|Token)?\s*[A-Za-z0-9._~+/=-]+"),
+    re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+"),
     re.compile(
-        r"(?i)\b(api[_-]?key|access[_-]?token|token|secret|password|passwd|cookie|authorization)"
+        r"(?i)\b(api[_-]?key|access[_-]?token|token|secret|password|passwd|cookie)"
         r"\s*[:=]\s*([^\s,&]+)"
     ),
-    re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+"),
     re.compile(r"https?://[^\s]+?(?:token|key|secret|webhook)[^\s]*", re.IGNORECASE),
 )
 
@@ -48,7 +49,9 @@ def sanitize_diagnostic_text(value: Any, *, max_length: int = 300) -> Optional[s
         return None
 
     for pattern in _SECRET_PATTERNS:
-        if "Bearer" in pattern.pattern:
+        if "authorization" in pattern.pattern:
+            text = pattern.sub(lambda match: f"{match.group(1)}=<redacted>", text)
+        elif "Bearer" in pattern.pattern:
             text = pattern.sub("Bearer <redacted>", text)
         elif "https?" in pattern.pattern:
             text = pattern.sub("<redacted-url>", text)
@@ -567,9 +570,7 @@ def _news_component(context_snapshot: Dict[str, Any], raw_result: Dict[str, Any]
             )
         return _component("news", label, "degraded", "新闻搜索无结果", {"record_count": 0})
     if has_snapshot_news and not has_retrieval_news:
-        if isinstance(context_snapshot.get("news_content"), str) and context_snapshot.get("news_content").strip():
-            return _component("news", label, "unknown", "新闻检索原始证据缺失（历史字段）")
-        return _component("news", label, "degraded", "未获取到新闻检索原始证据")
+        return _component("news", label, "unknown", "新闻检索未记录原始证据，可能未尝试或未启用")
     return _component("news", label, "unknown", "新闻搜索未记录诊断信息")
 
 

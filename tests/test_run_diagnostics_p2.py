@@ -168,8 +168,8 @@ class RunDiagnosticsP2TestCase(unittest.TestCase):
             report_saved=True,
         )
 
-        self.assertEqual(summary["components"]["news"]["status"], "degraded")
-        self.assertEqual(summary["status"], "degraded")
+        self.assertEqual(summary["components"]["news"]["status"], "unknown")
+        self.assertEqual(summary["status"], "normal")
 
     def test_news_summary_string_is_not_treated_as_retrieval_evidence(self) -> None:
         diagnostics = _diagnostic_snapshot()
@@ -259,6 +259,38 @@ class RunDiagnosticsP2TestCase(unittest.TestCase):
         self.assertEqual(summary["components"]["llm"]["status"], "failed")
         self.assertIn("LLM 失败", summary["reason"])
         self.assertNotIn("secret-value", summary["copy_text"])
+
+    def test_copy_text_redacts_authorization_bearer_tokens(self) -> None:
+        diagnostics = _diagnostic_snapshot()
+        diagnostics["llm_runs"] = [
+            {
+                "trace_id": "trace-p2",
+                "model": "deepseek-chat",
+                "success": False,
+                "error_type": "Unauthorized",
+                "error_message_sanitized": (
+                    "request failed Authorization: Bearer sk-live-token-abc123"
+                ),
+            }
+        ]
+
+        summary = build_run_diagnostic_summary(
+            context_snapshot={
+                "diagnostics": diagnostics,
+                "news_content": "新闻摘要",
+            },
+            raw_result={
+                "success": False,
+                "error_message": "Authorization: Bearer sk-raw-token-xyz789",
+            },
+            report_saved=True,
+        )
+
+        self.assertEqual(summary["status"], "failed")
+        self.assertIn("authorization=<redacted>", summary["copy_text"].lower())
+        self.assertNotIn("sk-live-token-abc123", summary["copy_text"])
+        self.assertNotIn("sk-raw-token-xyz789", summary["copy_text"])
+        self.assertNotIn("Bearer sk-", summary["copy_text"])
 
     def test_legacy_report_without_diagnostics_returns_unknown(self) -> None:
         summary = build_run_diagnostic_summary(
