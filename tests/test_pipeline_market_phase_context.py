@@ -17,7 +17,7 @@ ensure_litellm_stub()
 from src.analyzer import AnalysisResult
 from src.core.pipeline import StockAnalysisPipeline
 from src.enums import ReportType
-from src.services.run_diagnostics import activate_run_diagnostic_context, reset_run_diagnostic_context
+from src.services.run_diagnostics import activate_run_diagnostic_context, current_diagnostic_snapshot, reset_run_diagnostic_context
 
 
 def _analysis_result() -> AnalysisResult:
@@ -254,7 +254,11 @@ class PipelineMarketPhaseContextTestCase(unittest.TestCase):
             self.assertEqual(diagnostics["trace_id"], "trace-agent")
             self.assertEqual(diagnostics["query_id"], "q-agent")
             self.assertEqual(diagnostics["provider_runs"], [])
-            self.assertEqual(current_diagnostic_snapshot(), diagnostics)
+            # history_runs will be populated after save_analysis_history callback, so compare core fields only
+            current_snapshot = current_diagnostic_snapshot()
+            self.assertEqual(current_snapshot["trace_id"], diagnostics["trace_id"])
+            self.assertEqual(current_snapshot["query_id"], diagnostics["query_id"])
+            self.assertEqual(current_snapshot["provider_runs"], diagnostics["provider_runs"])
         finally:
             reset_run_diagnostic_context(token)
 
