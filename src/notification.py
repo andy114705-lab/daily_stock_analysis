@@ -506,6 +506,7 @@ class NotificationService(
         return (
             self._extract_dingtalk_session_webhook() is not None
             or self._extract_feishu_reply_info() is not None
+            or self._extract_telegram_context_chat_id() is not None
         )
 
     def _source_platform(self) -> str:
@@ -515,17 +516,29 @@ class NotificationService(
             platform = platform.value
         return str(platform or "").lower()
 
-    def _is_feishu_context_reply_only(self) -> bool:
-        """Feishu Stream command responses should not fan out to static webhooks."""
-        return (
-            isinstance(self._source_message, BotMessage)
-            and self._source_platform() == "feishu"
-            and self._extract_feishu_reply_info() is not None
-        )
+    def _extract_telegram_context_chat_id(self) -> Optional[str]:
+        """从来源消息中提取 Telegram 上下文 chat_id（用于异步回复）。"""
+        if not isinstance(self._source_message, BotMessage):
+            return None
+        if self._source_platform() != "telegram":
+            return None
+        raw_data = getattr(self._source_message, "raw_data", {}) or {}
+        for candidate in (
+            getattr(self._source_message, "chat_id", ""),
+            raw_data.get("chat_id"),
+            raw_data.get("message", {}).get("chat", {}).get("id") if isinstance(raw_data.get("message"), dict) else None,
+        ):
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+            if candidate is not None and not isinstance(candidate, str):
+                candidate_text = str(candidate).strip()
+                if candidate_text:
+                    return candidate_text
+        return None
 
     def should_broadcast_static_channels(self) -> bool:
         """Whether static notification channels should receive this dispatch."""
-        return not self._is_feishu_context_reply_only()
+        return not self._has_context_channel()
 
     def _extract_dingtalk_session_webhook(self) -> Optional[str]:
         """从来源消息中提取钉钉会话 Webhook（用于 Stream 模式回复）"""
@@ -600,6 +613,18 @@ class NotificationService(
                     logger.error("飞书会话（Stream）推送失败")
             except Exception as e:
                 logger.error(f"飞书会话（Stream）推送异常: {e}")
+
+        # 尝试 Telegram 会话上下文（按来源 chat_id 回执）
+        telegram_chat_id = self._extract_telegram_context_chat_id()
+        if telegram_chat_id:
+            try:
+                if self.send_to_telegram(content, chat_id=telegram_chat_id):
+                    logger.info("已通过 Telegram 上下文会话推送报告")
+                    success = True
+                else:
+                    logger.error("Telegram 上下文会话推送失败")
+            except Exception as e:
+                logger.error(f"Telegram 上下文会话推送异常: {e}")
 
         return success
 
@@ -2130,14 +2155,14 @@ class NotificationService(
         context_success = self.send_to_context(content)
         if not self.should_broadcast_static_channels():
             if context_success:
-                logger.info("已通过飞书消息上下文完成推送，跳过静态通知渠道")
+                logger.info("已通过上下文会话完成推送，跳过静态通知渠道")
                 return NotificationDispatchResult(
                     dispatched=True,
                     success=True,
                     status="sent",
                     channel_results=[ChannelAttemptResult(channel="__context__", success=True)],
                 )
-            logger.warning("飞书消息上下文推送失败，已跳过静态通知渠道")
+            logger.warning("交互式上下文推送失败，已跳过静态通知渠道")
             return NotificationDispatchResult(
                 dispatched=True,
                 success=False,
@@ -2150,7 +2175,7 @@ class NotificationService(
                         retryable=True,
                     )
                 ],
-                message="feishu context delivery failed; static channels skipped",
+                message="interactive context delivery failed; static channels skipped",
             )
 
         if not self._available_channels:

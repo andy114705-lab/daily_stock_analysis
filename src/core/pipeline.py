@@ -2426,7 +2426,7 @@ class StockAnalysisPipeline:
                         logger.info("决策仪表盘推送成功")
                     else:
                         logger.warning("决策仪表盘推送失败")
-                    logger.info("飞书消息上下文回复模式：已跳过静态通知渠道")
+                    logger.info("交互式消息上下文回复模式：已跳过静态通知渠道")
                     return
 
                 if channels and hasattr(self.notifier, "evaluate_noise_control"):
