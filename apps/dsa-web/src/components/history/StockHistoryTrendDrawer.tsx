@@ -125,6 +125,34 @@ export const StockHistoryTrendDrawer: React.FC<StockHistoryTrendDrawerProps> = (
     [currentRecordId, items, report],
   );
   const chartPoints = buildChartPoints(summary.chartScores);
+  const rangeControls = (
+    <div className="space-y-2 border-b border-border/60 bg-background/30 px-3 py-3">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="flex gap-2">
+          {RANGE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onRangeChange(option.value)}
+              className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                filters.range === option.value
+                  ? 'border-primary/50 bg-primary/10 text-primary'
+                  : 'border-border/70 bg-background/50 text-secondary-text hover:bg-hover hover:text-foreground'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <div className="rounded-lg border border-border/70 bg-background/50 px-2.5 py-1.5 text-xs text-secondary-text">
+          模型：全部
+        </div>
+        <div className="rounded-lg border border-border/70 bg-background/50 px-2.5 py-1.5 text-xs text-secondary-text">
+          排序：最新优先
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <Card variant="bordered" padding="sm" className="home-panel-card home-rail-card p-0">
@@ -164,9 +192,12 @@ export const StockHistoryTrendDrawer: React.FC<StockHistoryTrendDrawerProps> = (
             title="暂无更多同股历史分析"
             description="完成多次分析后，这里会展示观点变化、评分走势和模型记录。"
           />
+          {rangeControls}
         </div>
       ) : (
         <div className="space-y-3 p-3">
+          {rangeControls}
+
           <div className="grid grid-cols-3 divide-x divide-border/60 rounded-xl border border-border/60 bg-background/40 px-2 py-2 text-center">
             <div>
               <p className="text-xs text-muted-text">共 {total || items.length} 次分析</p>
@@ -227,31 +258,6 @@ export const StockHistoryTrendDrawer: React.FC<StockHistoryTrendDrawerProps> = (
               </svg>
             </div>
           </section>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex gap-2">
-              {RANGE_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => onRangeChange(option.value)}
-                  className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                    filters.range === option.value
-                      ? 'border-primary/50 bg-primary/10 text-primary'
-                      : 'border-border/70 bg-background/50 text-secondary-text hover:bg-hover hover:text-foreground'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            <div className="rounded-lg border border-border/70 bg-background/50 px-2.5 py-1.5 text-xs text-secondary-text">
-              模型：全部
-            </div>
-            <div className="rounded-lg border border-border/70 bg-background/50 px-2.5 py-1.5 text-xs text-secondary-text">
-              排序：最新优先
-            </div>
-          </div>
 
           <div className="overflow-hidden rounded-xl border border-border/60">
             <div className="grid grid-cols-[5rem_minmax(0,1.3fr)_2.5rem_4.5rem_4rem_minmax(0,1.2fr)] border-b border-border/60 bg-background/45 px-2 py-2 text-xs font-medium text-secondary-text">
